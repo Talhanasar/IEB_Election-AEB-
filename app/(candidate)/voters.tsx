@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,66 +6,81 @@ import {
   ScrollView,
   TextInput,
   Pressable,
+  StatusBar,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
+import { Pagination } from '@/components/Pagination';
+import VoterDetailModal from '@/components/VoterDetailModal';
 import { Colors, Spacing, FontSize, FontWeight, BorderRadius, Shadow } from '@/constants/theme';
+import {
+  getAllVoters,
+  searchVoters,
+  TOTAL_VOTERS,
+  ACTIVE_VOTERS,
+  DEFAULTER_VOTERS,
+  VOTERS_WITH_PHONE,
+  UNIVERSITIES,
+  getStatusColor,
+  getStatusLabel,
+} from '@/src/data/voterData';
+import type { Voter } from '@/src/data/voterTypes';
 
-interface Voter {
-  name: string;
-  membership: string;
-  org: string;
-  status: string;
-  phone: string;
-  institution: string;
-}
+const FILTER_CATEGORIES = ['All', 'Active', 'Defaulter', ...UNIVERSITIES.slice(0, 8)];
+const DEFAULT_PAGE_SIZE = 20;
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
-const FILTER_CATEGORIES = ['All', 'BUET', 'CUET', 'RUET', 'KUET', 'DUET'];
-
-const VOTERS: Voter[] = [
-  { name: 'Engr. Rakib Hasan', membership: 'IEB-990234', org: 'PDB', status: 'Supporter', phone: '01712345678', institution: 'BUET' },
-  { name: 'Engr. Salma Begum', membership: 'IEB-880567', org: 'PGCB', status: 'Contacted', phone: '01898765432', institution: 'CUET' },
-  { name: 'Engr. Mahfuz Alam', membership: 'IEB-770890', org: 'DESCO', status: 'Not Contacted', phone: '01556789012', institution: 'RUET' },
-  { name: 'Engr. Nadia Islam', membership: 'IEB-660123', org: 'WASA', status: 'Neutral', phone: '01623456789', institution: 'BUET' },
-  { name: 'Engr. Tariq Rahman', membership: 'IEB-550456', org: 'BPDB', status: 'Undecided', phone: '01734567890', institution: 'KUET' },
-];
-
-function getStatusColor(status: string) {
-  switch (status) {
-    case 'Supporter': return Colors.success;
-    case 'Contacted': return Colors.primaryBlue;
-    case 'Not Contacted': return Colors.textMuted;
-    case 'Neutral': return Colors.warning;
-    case 'Undecided': return Colors.danger;
-    default: return Colors.textSecondary;
-  }
-}
-
-const VoterCard = memo(function VoterCard({ item }: { item: Voter }) {
+const VoterCard = memo(function VoterCard({
+  item,
+  onPress,
+}: {
+  item: Voter;
+  onPress: (voter: Voter) => void;
+}) {
   const color = getStatusColor(item.status);
+  const label = getStatusLabel(item.status);
+  const initial = item.name.replace(/^ENGR\.\s*/i, '').charAt(0).toUpperCase();
+
+  const handlePhonePress = useCallback(() => {
+    // Placeholder for phone action
+  }, []);
+
+  const handleMessagePress = useCallback(() => {
+    // Placeholder for message action
+  }, []);
+
   return (
-    <Pressable style={styles.voterCard}>
+    <Pressable
+      style={styles.voterCard}
+      onPress={() => onPress(item)}
+      testID={`voter-card-${item.membershipNo}`}
+    >
       <View style={styles.voterAvatar}>
-        <Text style={styles.avatarText}>{item.name.charAt(6)}</Text>
+        <Text style={styles.avatarText}>{initial}</Text>
       </View>
       <View style={styles.voterInfo}>
-        <Text style={styles.voterName}>{item.name}</Text>
-        <Text style={styles.voterMeta}>{item.membership} • {item.institution}</Text>
-        <Text style={styles.voterOrg}>{item.org}</Text>
+        <Text style={styles.voterName} numberOfLines={1}>{item.name}</Text>
+        <Text style={styles.voterMeta}>
+          {item.membershipNo} • {item.university || 'N/A'} • {item.division}
+        </Text>
+        {item.jobLocation ? (
+          <Text style={styles.voterOrg} numberOfLines={1}>{item.jobLocation}</Text>
+        ) : (
+          <Text style={styles.voterOrg} numberOfLines={1}>{item.address.slice(0, 40)}...</Text>
+        )}
       </View>
       <View style={styles.voterRight}>
         <View style={[styles.statusBadge, { backgroundColor: color + '18' }]}>
-          <Text style={[styles.statusText, { color }]}>
-            {item.status}
-          </Text>
+          <Text style={[styles.statusText, { color }]}>{label}</Text>
         </View>
         <View style={styles.actionRow}>
-          <Pressable style={styles.actionBtn}>
-            <MaterialCommunityIcons name="phone-in-talk" size={18} color={Colors.primaryBlue} />
-          </Pressable>
-          <Pressable style={styles.actionBtn}>
+          {item.phone && (
+            <Pressable style={styles.actionBtn} onPress={handlePhonePress}>
+              <MaterialCommunityIcons name="phone-in-talk" size={18} color={Colors.primaryBlue} />
+            </Pressable>
+          )}
+          <Pressable style={styles.actionBtn} onPress={handleMessagePress}>
             <MaterialCommunityIcons name="message-text" size={18} color={Colors.success} />
           </Pressable>
         </View>
@@ -75,11 +90,73 @@ const VoterCard = memo(function VoterCard({ item }: { item: Voter }) {
 });
 
 export default function VotersScreen() {
-  const insets = useSafeAreaInsets();
   const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState('All');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [selectedVoter, setSelectedVoter] = useState<Voter | null>(null);
+
+  // Apply a dark-navy status bar only while Voters is focused, then restore
+  // the default appearance on blur so other candidate tabs are unaffected.
+  useFocusEffect(
+    useCallback(() => {
+      StatusBar.setBackgroundColor(Colors.darkNavy, true);
+      StatusBar.setBarStyle('light-content', true);
+      return () => {
+        StatusBar.setBackgroundColor('transparent', true);
+        StatusBar.setBarStyle('light-content', true);
+      };
+    }, []),
+  );
+
+  const filteredVoters = useMemo(() => {
+    let results = getAllVoters();
+
+    if (searchQuery.trim()) {
+      results = searchVoters(searchQuery);
+    }
+
+    if (activeFilter === 'Active') {
+      results = results.filter((v) => v.status === 'active');
+    } else if (activeFilter === 'Defaulter') {
+      results = results.filter((v) => v.status === 'defaulter');
+    } else if (activeFilter !== 'All') {
+      results = results.filter((v) => v.university === activeFilter);
+    }
+
+    return results;
+  }, [searchQuery, activeFilter]);
+
+  const totalPages = useMemo(
+    () => Math.max(1, Math.ceil(filteredVoters.length / pageSize)),
+    [filteredVoters.length, pageSize],
+  );
+  const safePage = Math.min(Math.max(1, currentPage), totalPages);
+  const startIdx = (safePage - 1) * pageSize;
+  const endIdx = Math.min(startIdx + pageSize, filteredVoters.length);
+
+  const displayedVoters = useMemo(
+    () => filteredVoters.slice(startIdx, endIdx),
+    [filteredVoters, startIdx, endIdx],
+  );
+
+  // Reset to page 1 when the user changes search query or active filter.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, activeFilter]);
+
+  const handlePageChange = useCallback((page: number) => {
+    setCurrentPage(page);
+  }, []);
+
+  const handlePageSizeChange = useCallback((size: number) => {
+    setPageSize(size);
+    setCurrentPage(1);
+  }, []);
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       <AppHeader variant="dark" showLogoutButton={true} onLogoutPress={() => router.push('/(voter)/home')} />
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -91,22 +168,32 @@ export default function VotersScreen() {
               style={styles.searchInput}
               placeholder="Search by name, ID, mobile..."
               placeholderTextColor={Colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              testID="voters-search-input"
             />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')}>
+                <MaterialCommunityIcons name="close-circle" size={20} color={Colors.textMuted} />
+              </Pressable>
+            )}
           </View>
         </View>
 
-        {/* Institution Filter */}
+        {/* Filter Chips */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterContainer}
         >
-          {FILTER_CATEGORIES.map((cat, idx) => (
+          {FILTER_CATEGORIES.map((cat) => (
             <Pressable
               key={cat}
-              style={[styles.filterChip, idx === 0 && styles.filterChipActive]}
+              testID={`voters-filter-chip-${cat}`}
+              style={[styles.filterChip, activeFilter === cat && styles.filterChipActive]}
+              onPress={() => setActiveFilter(cat)}
             >
-              <Text style={[styles.filterText, idx === 0 && styles.filterTextActive]}>{cat}</Text>
+              <Text style={[styles.filterText, activeFilter === cat && styles.filterTextActive]}>{cat}</Text>
             </Pressable>
           ))}
         </ScrollView>
@@ -114,32 +201,60 @@ export default function VotersScreen() {
         {/* Stats */}
         <View style={styles.statsRow}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>12,456</Text>
+            <Text style={styles.statValue}>{TOTAL_VOTERS.toLocaleString()}</Text>
             <Text style={styles.statLabel}>Total</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: Colors.success }]}>4,320</Text>
-            <Text style={styles.statLabel}>Contacted</Text>
+            <Text style={[styles.statValue, { color: Colors.success }]}>{ACTIVE_VOTERS.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Active</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: Colors.warning }]}>3,215</Text>
-            <Text style={styles.statLabel}>Supporters</Text>
+            <Text style={[styles.statValue, { color: Colors.warning }]}>{DEFAULTER_VOTERS.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>Defaulter</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statItem}>
-            <Text style={[styles.statValue, { color: Colors.danger }]}>4,921</Text>
-            <Text style={styles.statLabel}>Pending</Text>
+            <Text style={[styles.statValue, { color: Colors.danger }]}>{VOTERS_WITH_PHONE.toLocaleString()}</Text>
+            <Text style={styles.statLabel}>With Phone</Text>
           </View>
+        </View>
+
+        {/* Results Count */}
+        <View style={styles.resultsBar}>
+          <Text style={styles.resultsText} testID="voters-results-summary">
+            {filteredVoters.length === 0
+              ? `Showing 0 of 0 results${searchQuery ? ` for "${searchQuery}"` : ''}`
+              : `Showing ${startIdx + 1}\u2013${endIdx} of ${filteredVoters.length.toLocaleString()}${searchQuery ? ` for "${searchQuery}"` : ''}`}
+          </Text>
         </View>
 
         {/* Voter List */}
         <View style={styles.listContainer}>
-          {VOTERS.map((voter) => (
-            <VoterCard key={voter.membership} item={voter} />
+          {displayedVoters.map((voter) => (
+            <VoterCard
+              key={voter.membershipNo}
+              item={voter}
+              onPress={setSelectedVoter}
+            />
           ))}
         </View>
+
+        {/* Pagination */}
+        <Pagination
+          currentPage={currentPage}
+          totalItems={filteredVoters.length}
+          pageSize={pageSize}
+          pageSizeOptions={PAGE_SIZE_OPTIONS}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+        />
+
+        <VoterDetailModal
+          voter={selectedVoter}
+          onClose={() => setSelectedVoter(null)}
+        />
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -234,6 +349,14 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: Colors.borderLight,
   },
+  resultsBar: {
+    paddingHorizontal: Spacing.lg,
+    paddingBottom: Spacing.sm,
+  },
+  resultsText: {
+    fontSize: FontSize.sm,
+    color: Colors.textSecondary,
+  },
   listContainer: {
     marginHorizontal: Spacing.lg,
   },
@@ -299,5 +422,24 @@ const styles = StyleSheet.create({
   },
   actionBtn: {
     padding: 4,
+  },
+  loadMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.md,
+    marginHorizontal: Spacing.lg,
+    marginTop: Spacing.sm,
+    backgroundColor: Colors.white,
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.sm,
+  },
+  loadMoreText: {
+    fontSize: FontSize.md,
+    color: Colors.primaryBlue,
+    fontWeight: FontWeight.semibold,
+    marginRight: Spacing.xs,
   },
 });

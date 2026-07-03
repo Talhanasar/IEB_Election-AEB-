@@ -10,7 +10,7 @@ export default function NotFoundScreen() {
       <View style={styles.container}>
         <MaterialCommunityIcons name="alert-circle-outline" size={64} color={Colors.textMuted} />
         <Text style={styles.title}>Page Not Found</Text>
-        <Text style={styles.subtitle}>This screen doesn't exist.</Text>
+        <Text style={styles.subtitle}>This screen doesn&apos;t exist.</Text>
         <Link href="/" style={styles.link}>
           <Text style={styles.linkText}>Go to Home</Text>
         </Link>

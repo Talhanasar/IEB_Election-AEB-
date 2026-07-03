@@ -4,13 +4,10 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Pressable,
   Animated,
-  Image,
 } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import AppHeader from '@/components/AppHeader';
 import SectionHeader from '@/components/SectionHeader';
@@ -28,10 +25,15 @@ import {
   Shadow,
   BorderRadius,
 } from '@/constants/theme';
+import {
+  TOTAL_VOTERS,
+  ACTIVE_VOTERS,
+  DEFAULTER_VOTERS,
+  VOTERS_WITH_PHONE,
+} from '@/src/data/voterData';
 
 export default function CandidateDashboard() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
 
@@ -48,6 +50,7 @@ export default function CandidateDashboard() {
         useNativeDriver: true,
       }),
     ]).start();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -85,7 +88,7 @@ export default function CandidateDashboard() {
               <Text style={styles.positionText}>President Candidate</Text>
               <Text style={styles.memberIdText}>IEB-880123</Text>
               <Text style={styles.sloganText}>
-                "Together We Build, Together We Lead"
+                &ldquo;Together We Build, Together We Lead&rdquo;
               </Text>
             </View>
           </View>
@@ -118,29 +121,29 @@ export default function CandidateDashboard() {
           <KPICard
             icon={<FontAwesome5 name="users" size={20} color={Colors.primaryBlue} />}
             label="Total Voters"
-            value="12,456"
-            subtitle="All Voters"
+            value={TOTAL_VOTERS.toLocaleString()}
+            subtitle="All Registered"
             color={Colors.primaryBlue}
           />
           <KPICard
-            icon={<FontAwesome5 name="phone-alt" size={20} color={Colors.success} />}
-            label="Contacted Voters"
-            value="4,320"
-            subtitle="34.7% of Total"
+            icon={<FontAwesome5 name="check-circle" size={20} color={Colors.success} />}
+            label="Active Members"
+            value={ACTIVE_VOTERS.toLocaleString()}
+            subtitle={`${((ACTIVE_VOTERS / TOTAL_VOTERS) * 100).toFixed(1)}% of Total`}
             color={Colors.success}
           />
           <KPICard
-            icon={<FontAwesome5 name="handshake" size={20} color={Colors.warning} />}
-            label="Supporters"
-            value="3,215"
-            subtitle="25.8% of Total"
+            icon={<FontAwesome5 name="exclamation-triangle" size={20} color={Colors.warning} />}
+            label="Defaulters"
+            value={DEFAULTER_VOTERS.toLocaleString()}
+            subtitle={`${((DEFAULTER_VOTERS / TOTAL_VOTERS) * 100).toFixed(1)}% of Total`}
             color={Colors.warning}
           />
           <KPICard
-            icon={<MaterialCommunityIcons name="message-text" size={20} color={Colors.danger} />}
-            label="Messages Sent"
-            value="2,850"
-            subtitle="This Campaign"
+            icon={<FontAwesome5 name="phone-alt" size={20} color={Colors.danger} />}
+            label="With Phone"
+            value={VOTERS_WITH_PHONE.toLocaleString()}
+            subtitle="Contactable"
             color={Colors.danger}
           />
         </ScrollView>

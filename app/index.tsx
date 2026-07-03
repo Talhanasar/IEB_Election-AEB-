@@ -163,7 +163,7 @@ export default function Index() {
 
         <Animated.View style={[{ opacity: taglineOpacity }, styles.taglineContainer]}>
           <MaterialCommunityIcons name="vote-outline" size={16} color={Colors.accentGold} />
-          <Text style={styles.tagline}>Your Vote, Our Future</Text>
+          <Text style={styles.tagline}>Connecting Engineers, Strengthening Democracy</Text>
           <MaterialCommunityIcons name="vote-outline" size={16} color={Colors.accentGold} />
         </Animated.View>
 
